@@ -33,6 +33,7 @@ async function run() {
     const skillCollection = db.collection("skills");
     const honorCollection = db.collection("honors");
     const volunteerCollection = db.collection("volunteerings");
+    const galleryCollection = db.collection("gallery");
 
     app.post("/users", async (req, res) => {
       try {
@@ -910,12 +911,10 @@ async function run() {
         const voluntaryWork = await volunteerCollection.findOne(query);
 
         if (!voluntaryWork) {
-          return res
-            .status(404)
-            .send({
-              success: false,
-              message: "Voluntary work entry not found",
-            });
+          return res.status(404).send({
+            success: false,
+            message: "Voluntary work entry not found",
+          });
         }
 
         res.send(voluntaryWork);
@@ -942,12 +941,10 @@ async function run() {
         const result = await volunteerCollection.updateOne(filter, updateDoc);
 
         if (result.matchedCount === 0) {
-          return res
-            .status(404)
-            .send({
-              success: false,
-              message: "Voluntary work entry not found",
-            });
+          return res.status(404).send({
+            success: false,
+            message: "Voluntary work entry not found",
+          });
         }
 
         res.send({
@@ -972,17 +969,135 @@ async function run() {
         });
 
         if (result.deletedCount === 0) {
-          return res
-            .status(404)
-            .send({
-              success: false,
-              message: "Voluntary work entry not found",
-            });
+          return res.status(404).send({
+            success: false,
+            message: "Voluntary work entry not found",
+          });
         }
 
         res.send({
           success: true,
           message: "Voluntary work deleted successfully",
+          result,
+        });
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Invalid ID or Server Error",
+          error: error.message,
+        });
+      }
+    });
+
+    // POST: Add a new image/item to gallery
+    app.post("/gallery", async (req, res) => {
+      try {
+        const galleryItem = req.body;
+        galleryItem.createdAt = new Date();
+
+        const result = await galleryCollection.insertOne(galleryItem);
+        res.status(201).send({
+          success: true,
+          message: "Gallery item added successfully",
+          result,
+        });
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Failed to add gallery item",
+          error: error.message,
+        });
+      }
+    });
+
+    // GET: Fetch all gallery items (Sorted newest first)
+    app.get("/gallery", async (req, res) => {
+      try {
+        const result = await galleryCollection
+          .find()
+          .sort({ createdAt: -1 })
+          .toArray();
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Failed to fetch gallery items",
+          error: error.message,
+        });
+      }
+    });
+
+    // GET: Fetch a single gallery item by ID
+    app.get("/gallery/:id", async (req, res) => {
+      try {
+        const query = { _id: new ObjectId(req.params.id) };
+        const galleryItem = await galleryCollection.findOne(query);
+
+        if (!galleryItem) {
+          return res
+            .status(404)
+            .send({ success: false, message: "Gallery item not found" });
+        }
+
+        res.send(galleryItem);
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Invalid Gallery Item ID or Server Error",
+          error: error.message,
+        });
+      }
+    });
+
+    // PATCH: Update a gallery item by ID
+    app.patch("/gallery/:id", async (req, res) => {
+      try {
+        const filter = { _id: new ObjectId(req.params.id) };
+        const updateData = { ...req.body };
+        delete updateData._id;
+
+        const updateDoc = {
+          $set: { ...updateData, updatedAt: new Date() },
+        };
+
+        const result = await galleryCollection.updateOne(filter, updateDoc);
+
+        if (result.matchedCount === 0) {
+          return res
+            .status(404)
+            .send({ success: false, message: "Gallery item not found" });
+        }
+
+        res.send({
+          success: true,
+          message: "Gallery item updated successfully",
+          result,
+        });
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Failed to update gallery item",
+          error: error.message,
+        });
+      }
+    });
+
+    // DELETE: Remove a gallery item by ID
+    app.delete("/gallery/:id", async (req, res) => {
+      try {
+        const result = await galleryCollection.deleteOne({
+          _id: new ObjectId(req.params.id),
+        });
+
+        if (result.deletedCount === 0) {
+          return res
+            .status(404)
+            .send({ success: false, message: "Gallery item not found" });
+        }
+
+        res.send({
+          success: true,
+          message: "Gallery item deleted successfully",
           result,
         });
       } catch (error) {
