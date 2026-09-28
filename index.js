@@ -26,7 +26,8 @@ async function run() {
 
     const db = client.db("mamonur_rashid_db");
     const userCollection = db.collection("users");
-    const researchCollection = db.collection("research")
+    const researchCollection = db.collection("research");
+    const experienceCollection = db.collection("experiences");
 
     app.post("/users", async (req, res) => {
       try {
@@ -182,12 +183,10 @@ async function run() {
         const research = await researchCollection.findOne(query);
 
         if (!research) {
-          return res
-            .status(404)
-            .send({
-              success: false,
-              message: "Research publication not found",
-            });
+          return res.status(404).send({
+            success: false,
+            message: "Research publication not found",
+          });
         }
 
         res.send(research);
@@ -214,12 +213,10 @@ async function run() {
         const result = await researchCollection.updateOne(filter, updateDoc);
 
         if (result.matchedCount === 0) {
-          return res
-            .status(404)
-            .send({
-              success: false,
-              message: "Research publication not found",
-            });
+          return res.status(404).send({
+            success: false,
+            message: "Research publication not found",
+          });
         }
 
         res.send({
@@ -237,37 +234,151 @@ async function run() {
     });
 
     // DELETE: Remove a research publication by ID (Admin only)
-    app.delete(
-      "/research/:id",
-      async (req, res) => {
-        try {
-          const result = await researchCollection.deleteOne({
-            _id: new ObjectId(req.params.id),
-          });
+    app.delete("/research/:id", async (req, res) => {
+      try {
+        const result = await researchCollection.deleteOne({
+          _id: new ObjectId(req.params.id),
+        });
 
-          if (result.deletedCount === 0) {
-            return res
-              .status(404)
-              .send({
-                success: false,
-                message: "Research publication not found",
-              });
-          }
-
-          res.send({
-            success: true,
-            message: "Research deleted successfully",
-            result,
-          });
-        } catch (error) {
-          res.status(500).send({
+        if (result.deletedCount === 0) {
+          return res.status(404).send({
             success: false,
-            message: "Invalid ID or Server Error",
-            error: error.message,
+            message: "Research publication not found",
           });
         }
-      },
-    );
+
+        res.send({
+          success: true,
+          message: "Research deleted successfully",
+          result,
+        });
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Invalid ID or Server Error",
+          error: error.message,
+        });
+      }
+    });
+
+    app.post("/experiences", async (req, res) => {
+      try {
+        const experience = req.body;
+        experience.createdAt = new Date();
+
+        const result = await experienceCollection.insertOne(experience);
+        res.status(201).send({
+          success: true,
+          message: "Experience added successfully",
+          result,
+        });
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Failed to add experience",
+          error: error.message,
+        });
+      }
+    });
+
+    // GET: Fetch all Experiences
+    app.get("/experiences", async (req, res) => {
+      try {
+        const result = await experienceCollection
+          .find()
+          .sort({ createdAt: -1 })
+          .toArray();
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Failed to fetch experiences",
+          error: error.message,
+        });
+      }
+    });
+
+    // GET: Fetch single Experience by ID
+    app.get("/experiences/:id", async (req, res) => {
+      try {
+        const query = { _id: new ObjectId(req.params.id) };
+        const experience = await experienceCollection.findOne(query);
+
+        if (!experience) {
+          return res
+            .status(404)
+            .send({ success: false, message: "Experience record not found" });
+        }
+
+        res.send(experience);
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Invalid Experience ID or Server Error",
+          error: error.message,
+        });
+      }
+    });
+
+    // PATCH: Update Experience by ID
+    app.patch("/experiences/:id", async (req, res) => {
+      try {
+        const filter = { _id: new ObjectId(req.params.id) };
+        const updateData = { ...req.body };
+        delete updateData._id;
+
+        const updateDoc = {
+          $set: { ...updateData, updatedAt: new Date() },
+        };
+
+        const result = await experienceCollection.updateOne(filter, updateDoc);
+
+        if (result.matchedCount === 0) {
+          return res
+            .status(404)
+            .send({ success: false, message: "Experience record not found" });
+        }
+
+        res.send({
+          success: true,
+          message: "Experience updated successfully",
+          result,
+        });
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Failed to update experience",
+          error: error.message,
+        });
+      }
+    });
+
+    // DELETE: Remove Experience by ID
+    app.delete("/experiences/:id", async (req, res) => {
+      try {
+        const result = await experienceCollection.deleteOne({
+          _id: new ObjectId(req.params.id),
+        });
+
+        if (result.deletedCount === 0) {
+          return res
+            .status(404)
+            .send({ success: false, message: "Experience record not found" });
+        }
+
+        res.send({
+          success: true,
+          message: "Experience deleted successfully",
+          result,
+        });
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Invalid ID or Server Error",
+          error: error.message,
+        });
+      }
+    });
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
