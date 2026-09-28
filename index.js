@@ -29,6 +29,7 @@ async function run() {
     const researchCollection = db.collection("research");
     const experienceCollection = db.collection("experiences");
     const developmentCollection = db.collection("developments");
+    const academicCollection = db.collection("academics");
 
     app.post("/users", async (req, res) => {
       try {
@@ -490,6 +491,126 @@ async function run() {
         res.send({
           success: true,
           message: "Development project deleted successfully",
+          result,
+        });
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Invalid ID or Server Error",
+          error: error.message,
+        });
+      }
+    });
+
+    // POST: Create a new academic record
+    app.post("/academics", async (req, res) => {
+      try {
+        const academic = req.body;
+        academic.createdAt = new Date();
+
+        const result = await academicCollection.insertOne(academic);
+        res.status(201).send({
+          success: true,
+          message: "Academic background added successfully",
+          result,
+        });
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Failed to add academic background",
+          error: error.message,
+        });
+      }
+    });
+
+    // GET: Fetch all academic records (Sorted newest first)
+    app.get("/academics", async (req, res) => {
+      try {
+        const result = await academicCollection
+          .find()
+          .sort({ createdAt: -1 })
+          .toArray();
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Failed to fetch academic records",
+          error: error.message,
+        });
+      }
+    });
+
+    // GET: Fetch a single academic record by ID
+    app.get("/academics/:id", async (req, res) => {
+      try {
+        const query = { _id: new ObjectId(req.params.id) };
+        const academic = await academicCollection.findOne(query);
+
+        if (!academic) {
+          return res
+            .status(404)
+            .send({ success: false, message: "Academic record not found" });
+        }
+
+        res.send(academic);
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Invalid Academic ID or Server Error",
+          error: error.message,
+        });
+      }
+    });
+
+    // PATCH: Update an academic record by ID
+    app.patch("/academics/:id", async (req, res) => {
+      try {
+        const filter = { _id: new ObjectId(req.params.id) };
+        const updateData = { ...req.body };
+        delete updateData._id;
+
+        const updateDoc = {
+          $set: { ...updateData, updatedAt: new Date() },
+        };
+
+        const result = await academicCollection.updateOne(filter, updateDoc);
+
+        if (result.matchedCount === 0) {
+          return res
+            .status(404)
+            .send({ success: false, message: "Academic record not found" });
+        }
+
+        res.send({
+          success: true,
+          message: "Academic record updated successfully",
+          result,
+        });
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Failed to update academic record",
+          error: error.message,
+        });
+      }
+    });
+
+    // DELETE: Remove an academic record by ID
+    app.delete("/academics/:id", async (req, res) => {
+      try {
+        const result = await academicCollection.deleteOne({
+          _id: new ObjectId(req.params.id),
+        });
+
+        if (result.deletedCount === 0) {
+          return res
+            .status(404)
+            .send({ success: false, message: "Academic record not found" });
+        }
+
+        res.send({
+          success: true,
+          message: "Academic record deleted successfully",
           result,
         });
       } catch (error) {
