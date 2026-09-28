@@ -34,6 +34,7 @@ async function run() {
     const honorCollection = db.collection("honors");
     const volunteerCollection = db.collection("volunteerings");
     const galleryCollection = db.collection("gallery");
+    const referenceCollection = db.collection("references");
 
     app.post("/users", async (req, res) => {
       try {
@@ -1098,6 +1099,126 @@ async function run() {
         res.send({
           success: true,
           message: "Gallery item deleted successfully",
+          result,
+        });
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Invalid ID or Server Error",
+          error: error.message,
+        });
+      }
+    });
+
+    // POST: Create a new reference
+    app.post("/references", async (req, res) => {
+      try {
+        const reference = req.body;
+        reference.createdAt = new Date();
+
+        const result = await referenceCollection.insertOne(reference);
+        res.status(201).send({
+          success: true,
+          message: "Reference added successfully",
+          result,
+        });
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Failed to add reference",
+          error: error.message,
+        });
+      }
+    });
+
+    // GET: Fetch all references (Sorted newest first)
+    app.get("/references", async (req, res) => {
+      try {
+        const result = await referenceCollection
+          .find()
+          .sort({ createdAt: -1 })
+          .toArray();
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Failed to fetch references",
+          error: error.message,
+        });
+      }
+    });
+
+    // GET: Fetch a single reference by ID
+    app.get("/references/:id", async (req, res) => {
+      try {
+        const query = { _id: new ObjectId(req.params.id) };
+        const reference = await referenceCollection.findOne(query);
+
+        if (!reference) {
+          return res
+            .status(404)
+            .send({ success: false, message: "Reference not found" });
+        }
+
+        res.send(reference);
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Invalid Reference ID or Server Error",
+          error: error.message,
+        });
+      }
+    });
+
+    // PATCH: Update a reference by ID
+    app.patch("/references/:id", async (req, res) => {
+      try {
+        const filter = { _id: new ObjectId(req.params.id) };
+        const updateData = { ...req.body };
+        delete updateData._id;
+
+        const updateDoc = {
+          $set: { ...updateData, updatedAt: new Date() },
+        };
+
+        const result = await referenceCollection.updateOne(filter, updateDoc);
+
+        if (result.matchedCount === 0) {
+          return res
+            .status(404)
+            .send({ success: false, message: "Reference not found" });
+        }
+
+        res.send({
+          success: true,
+          message: "Reference updated successfully",
+          result,
+        });
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Failed to update reference",
+          error: error.message,
+        });
+      }
+    });
+
+    // DELETE: Remove a reference by ID
+    app.delete("/references/:id", async (req, res) => {
+      try {
+        const result = await referenceCollection.deleteOne({
+          _id: new ObjectId(req.params.id),
+        });
+
+        if (result.deletedCount === 0) {
+          return res
+            .status(404)
+            .send({ success: false, message: "Reference not found" });
+        }
+
+        res.send({
+          success: true,
+          message: "Reference deleted successfully",
           result,
         });
       } catch (error) {
