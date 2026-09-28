@@ -26,6 +26,7 @@ async function run() {
 
     const db = client.db("mamonur_rashid_db");
     const userCollection = db.collection("users");
+    const researchCollection = db.collection("research")
 
     app.post("/users", async (req, res) => {
       try {
@@ -78,40 +79,37 @@ async function run() {
       }
     });
 
-    app.patch(
-      "/users/:id/role",
-      async (req, res) => {
-        try {
-          const filter = { _id: new ObjectId(req.params.id) };
-          const updatedUserData = { ...req.body };
-          delete updatedUserData._id;
+    app.patch("/users/:id/role", async (req, res) => {
+      try {
+        const filter = { _id: new ObjectId(req.params.id) };
+        const updatedUserData = { ...req.body };
+        delete updatedUserData._id;
 
-          const existingUser = await userCollection.findOne(filter);
-          if (!existingUser) {
-            return res
-              .status(404)
-              .send({ success: false, message: "User not found" });
-          }
-
-          const updateDoc = {
-            $set: { ...updatedUserData, updatedAt: new Date() },
-          };
-          const result = await userCollection.updateOne(filter, updateDoc);
-
-          res.send({
-            success: true,
-            message: "User role updated successfully",
-            result,
-          });
-        } catch (error) {
-          res.status(500).send({
-            success: false,
-            message: "Server Error",
-            error: error.message,
-          });
+        const existingUser = await userCollection.findOne(filter);
+        if (!existingUser) {
+          return res
+            .status(404)
+            .send({ success: false, message: "User not found" });
         }
-      },
-    );
+
+        const updateDoc = {
+          $set: { ...updatedUserData, updatedAt: new Date() },
+        };
+        const result = await userCollection.updateOne(filter, updateDoc);
+
+        res.send({
+          success: true,
+          message: "User role updated successfully",
+          result,
+        });
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Server Error",
+          error: error.message,
+        });
+      }
+    });
 
     app.delete("/users/:id", async (req, res) => {
       try {
@@ -139,11 +137,137 @@ async function run() {
       }
     });
 
+    // POST: Create a new research publication (Admin only)
+    app.post("/research", async (req, res) => {
+      try {
+        const research = req.body;
+        research.createdAt = new Date();
 
+        const result = await researchCollection.insertOne(research);
+        res.status(201).send({
+          success: true,
+          message: "Research published successfully",
+          result,
+        });
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Failed to publish research",
+          error: error.message,
+        });
+      }
+    });
 
+    // GET: Fetch all research publications (Sorted newest first)
+    app.get("/research", async (req, res) => {
+      try {
+        const result = await researchCollection
+          .find()
+          .sort({ createdAt: -1 })
+          .toArray();
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Failed to fetch research publications",
+          error: error.message,
+        });
+      }
+    });
 
+    // GET: Fetch a single research publication by ID
+    app.get("/research/:id", async (req, res) => {
+      try {
+        const query = { _id: new ObjectId(req.params.id) };
+        const research = await researchCollection.findOne(query);
 
+        if (!research) {
+          return res
+            .status(404)
+            .send({
+              success: false,
+              message: "Research publication not found",
+            });
+        }
 
+        res.send(research);
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Invalid Research ID or Server Error",
+          error: error.message,
+        });
+      }
+    });
+
+    // PATCH: Update a research publication by ID (Admin only)
+    app.patch("/research/:id", async (req, res) => {
+      try {
+        const filter = { _id: new ObjectId(req.params.id) };
+        const updateData = { ...req.body };
+        delete updateData._id;
+
+        const updateDoc = {
+          $set: { ...updateData, updatedAt: new Date() },
+        };
+
+        const result = await researchCollection.updateOne(filter, updateDoc);
+
+        if (result.matchedCount === 0) {
+          return res
+            .status(404)
+            .send({
+              success: false,
+              message: "Research publication not found",
+            });
+        }
+
+        res.send({
+          success: true,
+          message: "Research updated successfully",
+          result,
+        });
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Failed to update research publication",
+          error: error.message,
+        });
+      }
+    });
+
+    // DELETE: Remove a research publication by ID (Admin only)
+    app.delete(
+      "/research/:id",
+      async (req, res) => {
+        try {
+          const result = await researchCollection.deleteOne({
+            _id: new ObjectId(req.params.id),
+          });
+
+          if (result.deletedCount === 0) {
+            return res
+              .status(404)
+              .send({
+                success: false,
+                message: "Research publication not found",
+              });
+          }
+
+          res.send({
+            success: true,
+            message: "Research deleted successfully",
+            result,
+          });
+        } catch (error) {
+          res.status(500).send({
+            success: false,
+            message: "Invalid ID or Server Error",
+            error: error.message,
+          });
+        }
+      },
+    );
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
