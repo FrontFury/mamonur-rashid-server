@@ -30,6 +30,7 @@ async function run() {
     const experienceCollection = db.collection("experiences");
     const developmentCollection = db.collection("developments");
     const academicCollection = db.collection("academics");
+    const skillCollection = db.collection("skills");
 
     app.post("/users", async (req, res) => {
       try {
@@ -611,6 +612,126 @@ async function run() {
         res.send({
           success: true,
           message: "Academic record deleted successfully",
+          result,
+        });
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Invalid ID or Server Error",
+          error: error.message,
+        });
+      }
+    });
+
+    // POST: Create a new skill
+    app.post("/skills", async (req, res) => {
+      try {
+        const skill = req.body;
+        skill.createdAt = new Date();
+
+        const result = await skillCollection.insertOne(skill);
+        res.status(201).send({
+          success: true,
+          message: "Skill added successfully",
+          result,
+        });
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Failed to add skill",
+          error: error.message,
+        });
+      }
+    });
+
+    // GET: Fetch all skills (Sorted newest first)
+    app.get("/skills", async (req, res) => {
+      try {
+        const result = await skillCollection
+          .find()
+          .sort({ createdAt: -1 })
+          .toArray();
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Failed to fetch skills",
+          error: error.message,
+        });
+      }
+    });
+
+    // GET: Fetch a single skill by ID
+    app.get("/skills/:id", async (req, res) => {
+      try {
+        const query = { _id: new ObjectId(req.params.id) };
+        const skill = await skillCollection.findOne(query);
+
+        if (!skill) {
+          return res
+            .status(404)
+            .send({ success: false, message: "Skill not found" });
+        }
+
+        res.send(skill);
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Invalid Skill ID or Server Error",
+          error: error.message,
+        });
+      }
+    });
+
+    // PATCH: Update a skill by ID
+    app.patch("/skills/:id", async (req, res) => {
+      try {
+        const filter = { _id: new ObjectId(req.params.id) };
+        const updateData = { ...req.body };
+        delete updateData._id;
+
+        const updateDoc = {
+          $set: { ...updateData, updatedAt: new Date() },
+        };
+
+        const result = await skillCollection.updateOne(filter, updateDoc);
+
+        if (result.matchedCount === 0) {
+          return res
+            .status(404)
+            .send({ success: false, message: "Skill not found" });
+        }
+
+        res.send({
+          success: true,
+          message: "Skill updated successfully",
+          result,
+        });
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Failed to update skill",
+          error: error.message,
+        });
+      }
+    });
+
+    // DELETE: Remove a skill by ID
+    app.delete("/skills/:id", async (req, res) => {
+      try {
+        const result = await skillCollection.deleteOne({
+          _id: new ObjectId(req.params.id),
+        });
+
+        if (result.deletedCount === 0) {
+          return res
+            .status(404)
+            .send({ success: false, message: "Skill not found" });
+        }
+
+        res.send({
+          success: true,
+          message: "Skill deleted successfully",
           result,
         });
       } catch (error) {
