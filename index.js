@@ -31,6 +31,7 @@ async function run() {
     const developmentCollection = db.collection("developments");
     const academicCollection = db.collection("academics");
     const skillCollection = db.collection("skills");
+    const honorCollection = db.collection("honors");
 
     app.post("/users", async (req, res) => {
       try {
@@ -732,6 +733,126 @@ async function run() {
         res.send({
           success: true,
           message: "Skill deleted successfully",
+          result,
+        });
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Invalid ID or Server Error",
+          error: error.message,
+        });
+      }
+    });
+
+    // POST: Create a new honor or award
+    app.post("/honors", async (req, res) => {
+      try {
+        const honor = req.body;
+        honor.createdAt = new Date();
+
+        const result = await honorCollection.insertOne(honor);
+        res.status(201).send({
+          success: true,
+          message: "Honor/Award added successfully",
+          result,
+        });
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Failed to add honor/award",
+          error: error.message,
+        });
+      }
+    });
+
+    // GET: Fetch all honors & awards (Sorted newest first)
+    app.get("/honors", async (req, res) => {
+      try {
+        const result = await honorCollection
+          .find()
+          .sort({ createdAt: -1 })
+          .toArray();
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Failed to fetch honors and awards",
+          error: error.message,
+        });
+      }
+    });
+
+    // GET: Fetch a single honor/award by ID
+    app.get("/honors/:id", async (req, res) => {
+      try {
+        const query = { _id: new ObjectId(req.params.id) };
+        const honor = await honorCollection.findOne(query);
+
+        if (!honor) {
+          return res
+            .status(404)
+            .send({ success: false, message: "Honor/Award not found" });
+        }
+
+        res.send(honor);
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Invalid Honor ID or Server Error",
+          error: error.message,
+        });
+      }
+    });
+
+    // PATCH: Update an honor/award by ID
+    app.patch("/honors/:id", async (req, res) => {
+      try {
+        const filter = { _id: new ObjectId(req.params.id) };
+        const updateData = { ...req.body };
+        delete updateData._id;
+
+        const updateDoc = {
+          $set: { ...updateData, updatedAt: new Date() },
+        };
+
+        const result = await honorCollection.updateOne(filter, updateDoc);
+
+        if (result.matchedCount === 0) {
+          return res
+            .status(404)
+            .send({ success: false, message: "Honor/Award not found" });
+        }
+
+        res.send({
+          success: true,
+          message: "Honor/Award updated successfully",
+          result,
+        });
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Failed to update honor/award",
+          error: error.message,
+        });
+      }
+    });
+
+    // DELETE: Remove an honor/award by ID
+    app.delete("/honors/:id", async (req, res) => {
+      try {
+        const result = await honorCollection.deleteOne({
+          _id: new ObjectId(req.params.id),
+        });
+
+        if (result.deletedCount === 0) {
+          return res
+            .status(404)
+            .send({ success: false, message: "Honor/Award not found" });
+        }
+
+        res.send({
+          success: true,
+          message: "Honor/Award deleted successfully",
           result,
         });
       } catch (error) {
