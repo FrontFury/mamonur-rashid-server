@@ -32,6 +32,7 @@ async function run() {
     const academicCollection = db.collection("academics");
     const skillCollection = db.collection("skills");
     const honorCollection = db.collection("honors");
+    const volunteerCollection = db.collection("volunteerings");
 
     app.post("/users", async (req, res) => {
       try {
@@ -853,6 +854,135 @@ async function run() {
         res.send({
           success: true,
           message: "Honor/Award deleted successfully",
+          result,
+        });
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Invalid ID or Server Error",
+          error: error.message,
+        });
+      }
+    });
+
+    // POST: Create a new voluntary work entry
+    app.post("/volunteerings", async (req, res) => {
+      try {
+        const voluntaryWork = req.body;
+        voluntaryWork.createdAt = new Date();
+
+        const result = await volunteerCollection.insertOne(voluntaryWork);
+        res.status(201).send({
+          success: true,
+          message: "Voluntary work added successfully",
+          result,
+        });
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Failed to add voluntary work",
+          error: error.message,
+        });
+      }
+    });
+
+    // GET: Fetch all voluntary work entries (Sorted newest first)
+    app.get("/volunteerings", async (req, res) => {
+      try {
+        const result = await volunteerCollection
+          .find()
+          .sort({ createdAt: -1 })
+          .toArray();
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Failed to fetch voluntary works",
+          error: error.message,
+        });
+      }
+    });
+
+    // GET: Fetch a single voluntary work entry by ID
+    app.get("/volunteerings/:id", async (req, res) => {
+      try {
+        const query = { _id: new ObjectId(req.params.id) };
+        const voluntaryWork = await volunteerCollection.findOne(query);
+
+        if (!voluntaryWork) {
+          return res
+            .status(404)
+            .send({
+              success: false,
+              message: "Voluntary work entry not found",
+            });
+        }
+
+        res.send(voluntaryWork);
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Invalid Voluntary Work ID or Server Error",
+          error: error.message,
+        });
+      }
+    });
+
+    // PATCH: Update a voluntary work entry by ID
+    app.patch("/volunteerings/:id", async (req, res) => {
+      try {
+        const filter = { _id: new ObjectId(req.params.id) };
+        const updateData = { ...req.body };
+        delete updateData._id;
+
+        const updateDoc = {
+          $set: { ...updateData, updatedAt: new Date() },
+        };
+
+        const result = await volunteerCollection.updateOne(filter, updateDoc);
+
+        if (result.matchedCount === 0) {
+          return res
+            .status(404)
+            .send({
+              success: false,
+              message: "Voluntary work entry not found",
+            });
+        }
+
+        res.send({
+          success: true,
+          message: "Voluntary work updated successfully",
+          result,
+        });
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Failed to update voluntary work",
+          error: error.message,
+        });
+      }
+    });
+
+    // DELETE: Remove a voluntary work entry by ID
+    app.delete("/volunteerings/:id", async (req, res) => {
+      try {
+        const result = await volunteerCollection.deleteOne({
+          _id: new ObjectId(req.params.id),
+        });
+
+        if (result.deletedCount === 0) {
+          return res
+            .status(404)
+            .send({
+              success: false,
+              message: "Voluntary work entry not found",
+            });
+        }
+
+        res.send({
+          success: true,
+          message: "Voluntary work deleted successfully",
           result,
         });
       } catch (error) {
