@@ -28,6 +28,7 @@ async function run() {
     const userCollection = db.collection("users");
     const researchCollection = db.collection("research");
     const experienceCollection = db.collection("experiences");
+    const developmentCollection = db.collection("developments");
 
     app.post("/users", async (req, res) => {
       try {
@@ -369,6 +370,126 @@ async function run() {
         res.send({
           success: true,
           message: "Experience deleted successfully",
+          result,
+        });
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Invalid ID or Server Error",
+          error: error.message,
+        });
+      }
+    });
+
+    // POST: Create a new development/project
+    app.post("/developments", async (req, res) => {
+      try {
+        const development = req.body;
+        development.createdAt = new Date();
+
+        const result = await developmentCollection.insertOne(development);
+        res.status(201).send({
+          success: true,
+          message: "Development project added successfully",
+          result,
+        });
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Failed to add development project",
+          error: error.message,
+        });
+      }
+    });
+
+    // GET: Fetch all development projects (Sorted newest first)
+    app.get("/developments", async (req, res) => {
+      try {
+        const result = await developmentCollection
+          .find()
+          .sort({ createdAt: -1 })
+          .toArray();
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Failed to fetch development projects",
+          error: error.message,
+        });
+      }
+    });
+
+    // GET: Fetch a single development project by ID
+    app.get("/developments/:id", async (req, res) => {
+      try {
+        const query = { _id: new ObjectId(req.params.id) };
+        const development = await developmentCollection.findOne(query);
+
+        if (!development) {
+          return res
+            .status(404)
+            .send({ success: false, message: "Development project not found" });
+        }
+
+        res.send(development);
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Invalid Development ID or Server Error",
+          error: error.message,
+        });
+      }
+    });
+
+    // PATCH: Update a development project by ID
+    app.patch("/developments/:id", async (req, res) => {
+      try {
+        const filter = { _id: new ObjectId(req.params.id) };
+        const updateData = { ...req.body };
+        delete updateData._id;
+
+        const updateDoc = {
+          $set: { ...updateData, updatedAt: new Date() },
+        };
+
+        const result = await developmentCollection.updateOne(filter, updateDoc);
+
+        if (result.matchedCount === 0) {
+          return res
+            .status(404)
+            .send({ success: false, message: "Development project not found" });
+        }
+
+        res.send({
+          success: true,
+          message: "Development project updated successfully",
+          result,
+        });
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Failed to update development project",
+          error: error.message,
+        });
+      }
+    });
+
+    // DELETE: Remove a development project by ID
+    app.delete("/developments/:id", async (req, res) => {
+      try {
+        const result = await developmentCollection.deleteOne({
+          _id: new ObjectId(req.params.id),
+        });
+
+        if (result.deletedCount === 0) {
+          return res
+            .status(404)
+            .send({ success: false, message: "Development project not found" });
+        }
+
+        res.send({
+          success: true,
+          message: "Development project deleted successfully",
           result,
         });
       } catch (error) {
