@@ -145,7 +145,7 @@ app.post("/users", async (req, res) => {
       }
     });
 
-    app.get("/users/role/:email",verifyFBToken,verifyAdmin, async (req, res) => {
+    app.get("/users/role/:email", async (req, res) => {
       const email = req.params.email;
       const user = await userCollection.findOne({ email });
 
