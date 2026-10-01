@@ -1,15 +1,64 @@
 require("dotenv").config();
 const express = require("express");
-const app = express();
 const cors = require("cors");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
+const { initializeApp, cert, getApps } = require("firebase-admin/app");
+const { getAuth } = require("firebase-admin/auth");
+
+const app = express();
 const port = process.env.PORT || 3000;
+
+// Vercel: Wait until MongoDB and routes are ready
+let serverReadyResolve;
+let serverReadyReject;
+
+const serverReady = new Promise((resolve, reject) => {
+  serverReadyResolve = resolve;
+  serverReadyReject = reject;
+});
+
+// Firebase Admin Setup
+if (process.env.FB_SERVICE_KEY) {
+  const decoded = Buffer.from(process.env.FB_SERVICE_KEY, "base64").toString(
+    "utf8",
+  );
+  const serviceAccount = JSON.parse(decoded);
+
+  if (!getApps().length) {
+    initializeApp({
+      credential: cert(serviceAccount),
+    });
+  }
+}
 
 // Middlewares
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ limit: "10mb", extended: true }));
 
+// Custom Auth Middleware
+const verifyFBToken = async (req, res, next) => {
+  const authHeader = req.headers?.authorization;
+
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).send({ message: "Unauthorized Access" });
+  }
+
+  try {
+    const idToken = authHeader.split(" ")[1];
+    const decodedToken = await getAuth().verifyIdToken(idToken);
+
+    req.decoded_email = decodedToken.email;
+    next();
+  } catch (err) {
+    console.error("Token Verification Error:", err.message);
+    return res
+      .status(403)
+      .send({ message: "Forbidden Access", error: err.message });
+  }
+};
+
+// MongoDB Setup
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.td56s.mongodb.net/?appName=Cluster0`;
 const client = new MongoClient(uri, {
   serverApi: {
@@ -19,9 +68,15 @@ const client = new MongoClient(uri, {
   },
 });
 
+app.get("/favicon.ico", (req, res) => res.status(204).end());
+
+// Root API
+app.get("/", (req, res) => {
+  res.send("MD Mamonur Rashid Running............");
+});
+
 async function run() {
   try {
-    // Connect the client to the server (optional starting in v4.7)
     await client.connect();
 
     const db = client.db("mamonur_rashid_db");
@@ -36,7 +91,21 @@ async function run() {
     const galleryCollection = db.collection("gallery");
     const referenceCollection = db.collection("references");
 
-    app.post("/users", async (req, res) => {
+    // Admin Middleware
+    const verifyAdmin = async (req, res, next) => {
+      const email = req.decoded_email;
+      const query = { email };
+      const user = await userCollection.findOne(query);
+
+      if (!user || user.role !== "admin") {
+        return res.status(403).send({ message: "forbidden access" });
+      }
+
+      next();
+    };
+
+// Ekhane route
+app.post("/users", async (req, res) => {
       try {
         const user = req.body;
         const userExists = await userCollection.findOne({ email: user.email });
@@ -60,7 +129,7 @@ async function run() {
       }
     });
 
-    app.get("/users", async (req, res) => {
+    app.get("/users",verifyFBToken,verifyAdmin, async (req, res) => {
       try {
         const result = await userCollection
           .find()
@@ -76,7 +145,7 @@ async function run() {
       }
     });
 
-    app.get("/users/role/:email", async (req, res) => {
+    app.get("/users/role/:email",verifyFBToken,verifyAdmin, async (req, res) => {
       const email = req.params.email;
       const user = await userCollection.findOne({ email });
 
@@ -87,7 +156,7 @@ async function run() {
       }
     });
 
-    app.patch("/users/:id/role", async (req, res) => {
+    app.patch("/users/:id/role",verifyFBToken,verifyAdmin, async (req, res) => {
       try {
         const filter = { _id: new ObjectId(req.params.id) };
         const updatedUserData = { ...req.body };
@@ -119,7 +188,7 @@ async function run() {
       }
     });
 
-    app.delete("/users/:id", async (req, res) => {
+    app.delete("/users/:id",verifyFBToken,verifyAdmin, async (req, res) => {
       try {
         const result = await userCollection.deleteOne({
           _id: new ObjectId(req.params.id),
@@ -146,7 +215,7 @@ async function run() {
     });
 
     // POST: Create a new research publication (Admin only)
-    app.post("/research", async (req, res) => {
+    app.post("/research",verifyFBToken,verifyAdmin, async (req, res) => {
       try {
         const research = req.body;
         research.createdAt = new Date();
@@ -207,7 +276,7 @@ async function run() {
     });
 
     // PATCH: Update a research publication by ID (Admin only)
-    app.patch("/research/:id", async (req, res) => {
+    app.patch("/research/:id",verifyFBToken,verifyAdmin, async (req, res) => {
       try {
         const filter = { _id: new ObjectId(req.params.id) };
         const updateData = { ...req.body };
@@ -241,7 +310,7 @@ async function run() {
     });
 
     // DELETE: Remove a research publication by ID (Admin only)
-    app.delete("/research/:id", async (req, res) => {
+    app.delete("/research/:id",verifyFBToken,verifyAdmin, async (req, res) => {
       try {
         const result = await researchCollection.deleteOne({
           _id: new ObjectId(req.params.id),
@@ -268,7 +337,7 @@ async function run() {
       }
     });
 
-    app.post("/experiences", async (req, res) => {
+    app.post("/experiences",verifyFBToken,verifyAdmin, async (req, res) => {
       try {
         const experience = req.body;
         experience.createdAt = new Date();
@@ -328,7 +397,7 @@ async function run() {
     });
 
     // PATCH: Update Experience by ID
-    app.patch("/experiences/:id", async (req, res) => {
+    app.patch("/experiences/:id",verifyFBToken,verifyAdmin, async (req, res) => {
       try {
         const filter = { _id: new ObjectId(req.params.id) };
         const updateData = { ...req.body };
@@ -361,7 +430,7 @@ async function run() {
     });
 
     // DELETE: Remove Experience by ID
-    app.delete("/experiences/:id", async (req, res) => {
+    app.delete("/experiences/:id",verifyFBToken,verifyAdmin, async (req, res) => {
       try {
         const result = await experienceCollection.deleteOne({
           _id: new ObjectId(req.params.id),
@@ -388,7 +457,7 @@ async function run() {
     });
 
     // POST: Create a new development/project
-    app.post("/developments", async (req, res) => {
+    app.post("/developments",verifyFBToken,verifyAdmin, async (req, res) => {
       try {
         const development = req.body;
         development.createdAt = new Date();
@@ -448,7 +517,7 @@ async function run() {
     });
 
     // PATCH: Update a development project by ID
-    app.patch("/developments/:id", async (req, res) => {
+    app.patch("/developments/:id",verifyFBToken,verifyAdmin, async (req, res) => {
       try {
         const filter = { _id: new ObjectId(req.params.id) };
         const updateData = { ...req.body };
@@ -481,7 +550,7 @@ async function run() {
     });
 
     // DELETE: Remove a development project by ID
-    app.delete("/developments/:id", async (req, res) => {
+    app.delete("/developments/:id",verifyFBToken,verifyAdmin, async (req, res) => {
       try {
         const result = await developmentCollection.deleteOne({
           _id: new ObjectId(req.params.id),
@@ -508,7 +577,7 @@ async function run() {
     });
 
     // POST: Create a new academic record
-    app.post("/academics", async (req, res) => {
+    app.post("/academics",verifyFBToken,verifyAdmin, async (req, res) => {
       try {
         const academic = req.body;
         academic.createdAt = new Date();
@@ -568,7 +637,7 @@ async function run() {
     });
 
     // PATCH: Update an academic record by ID
-    app.patch("/academics/:id", async (req, res) => {
+    app.patch("/academics/:id",verifyFBToken,verifyAdmin, async (req, res) => {
       try {
         const filter = { _id: new ObjectId(req.params.id) };
         const updateData = { ...req.body };
@@ -601,7 +670,7 @@ async function run() {
     });
 
     // DELETE: Remove an academic record by ID
-    app.delete("/academics/:id", async (req, res) => {
+    app.delete("/academics/:id",verifyFBToken,verifyAdmin, async (req, res) => {
       try {
         const result = await academicCollection.deleteOne({
           _id: new ObjectId(req.params.id),
@@ -628,7 +697,7 @@ async function run() {
     });
 
     // POST: Create a new skill
-    app.post("/skills", async (req, res) => {
+    app.post("/skills",verifyFBToken,verifyAdmin, async (req, res) => {
       try {
         const skill = req.body;
         skill.createdAt = new Date();
@@ -688,7 +757,7 @@ async function run() {
     });
 
     // PATCH: Update a skill by ID
-    app.patch("/skills/:id", async (req, res) => {
+    app.patch("/skills/:id",verifyFBToken,verifyAdmin, async (req, res) => {
       try {
         const filter = { _id: new ObjectId(req.params.id) };
         const updateData = { ...req.body };
@@ -721,7 +790,7 @@ async function run() {
     });
 
     // DELETE: Remove a skill by ID
-    app.delete("/skills/:id", async (req, res) => {
+    app.delete("/skills/:id",verifyFBToken,verifyAdmin, async (req, res) => {
       try {
         const result = await skillCollection.deleteOne({
           _id: new ObjectId(req.params.id),
@@ -748,7 +817,7 @@ async function run() {
     });
 
     // POST: Create a new honor or award
-    app.post("/honors", async (req, res) => {
+    app.post("/honors",verifyFBToken,verifyAdmin, async (req, res) => {
       try {
         const honor = req.body;
         honor.createdAt = new Date();
@@ -808,7 +877,7 @@ async function run() {
     });
 
     // PATCH: Update an honor/award by ID
-    app.patch("/honors/:id", async (req, res) => {
+    app.patch("/honors/:id",verifyFBToken,verifyAdmin, async (req, res) => {
       try {
         const filter = { _id: new ObjectId(req.params.id) };
         const updateData = { ...req.body };
@@ -841,7 +910,7 @@ async function run() {
     });
 
     // DELETE: Remove an honor/award by ID
-    app.delete("/honors/:id", async (req, res) => {
+    app.delete("/honors/:id",verifyFBToken,verifyAdmin, async (req, res) => {
       try {
         const result = await honorCollection.deleteOne({
           _id: new ObjectId(req.params.id),
@@ -868,7 +937,7 @@ async function run() {
     });
 
     // POST: Create a new voluntary work entry
-    app.post("/volunteerings", async (req, res) => {
+    app.post("/volunteerings",verifyFBToken,verifyAdmin, async (req, res) => {
       try {
         const voluntaryWork = req.body;
         voluntaryWork.createdAt = new Date();
@@ -929,7 +998,7 @@ async function run() {
     });
 
     // PATCH: Update a voluntary work entry by ID
-    app.patch("/volunteerings/:id", async (req, res) => {
+    app.patch("/volunteerings/:id",verifyFBToken,verifyAdmin, async (req, res) => {
       try {
         const filter = { _id: new ObjectId(req.params.id) };
         const updateData = { ...req.body };
@@ -963,7 +1032,7 @@ async function run() {
     });
 
     // DELETE: Remove a voluntary work entry by ID
-    app.delete("/volunteerings/:id", async (req, res) => {
+    app.delete("/volunteerings/:id",verifyFBToken,verifyAdmin, async (req, res) => {
       try {
         const result = await volunteerCollection.deleteOne({
           _id: new ObjectId(req.params.id),
@@ -991,7 +1060,7 @@ async function run() {
     });
 
     // POST: Add a new image/item to gallery
-    app.post("/gallery", async (req, res) => {
+    app.post("/gallery",verifyFBToken,verifyAdmin, async (req, res) => {
       try {
         const galleryItem = req.body;
         galleryItem.createdAt = new Date();
@@ -1051,7 +1120,7 @@ async function run() {
     });
 
     // PATCH: Update a gallery item by ID
-    app.patch("/gallery/:id", async (req, res) => {
+    app.patch("/gallery/:id",verifyFBToken,verifyAdmin, async (req, res) => {
       try {
         const filter = { _id: new ObjectId(req.params.id) };
         const updateData = { ...req.body };
@@ -1084,7 +1153,7 @@ async function run() {
     });
 
     // DELETE: Remove a gallery item by ID
-    app.delete("/gallery/:id", async (req, res) => {
+    app.delete("/gallery/:id",verifyFBToken,verifyAdmin, async (req, res) => {
       try {
         const result = await galleryCollection.deleteOne({
           _id: new ObjectId(req.params.id),
@@ -1111,7 +1180,7 @@ async function run() {
     });
 
     // POST: Create a new reference
-    app.post("/references", async (req, res) => {
+    app.post("/references",verifyFBToken,verifyAdmin, async (req, res) => {
       try {
         const reference = req.body;
         reference.createdAt = new Date();
@@ -1171,7 +1240,7 @@ async function run() {
     });
 
     // PATCH: Update a reference by ID
-    app.patch("/references/:id", async (req, res) => {
+    app.patch("/references/:id",verifyFBToken,verifyAdmin, async (req, res) => {
       try {
         const filter = { _id: new ObjectId(req.params.id) };
         const updateData = { ...req.body };
@@ -1204,7 +1273,7 @@ async function run() {
     });
 
     // DELETE: Remove a reference by ID
-    app.delete("/references/:id", async (req, res) => {
+    app.delete("/references/:id",verifyFBToken,verifyAdmin, async (req, res) => {
       try {
         const result = await referenceCollection.deleteOne({
           _id: new ObjectId(req.params.id),
@@ -1228,24 +1297,38 @@ async function run() {
           error: error.message,
         });
       }
-    });
-
-    // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
-    console.log(
-      "Pinged your deployment. You successfully connected to MongoDB!",
-    );
-  } finally {
-    // Ensures that the client will close when you finish/error
-    // await client.close();
+    }); 
+    serverReadyResolve();
+}catch (error) {
+    console.error("Database connection error:", error);
+    serverReadyReject(error);
   }
 }
-run().catch(console.dir);
 
-app.get("/", (req, res) => {
-  res.send("Md. Mamonur Rashid Running............");
+// Vercel: Wait for MongoDB connection and route registration
+app.use(async (req, res, next) => {
+  try {
+    await serverReady;
+    next();
+  } catch (error) {
+    console.error("Server initialization failed:", error.message);
+
+    res.status(500).send({
+      success: false,
+      message: "Server initialization failed",
+    });
+  }
 });
 
-app.listen(port, () => {
-  console.log(`Example app listening on port ${port}`);
+// Function-টি কল দেওয়া হলো
+run().catch((error) => {
+  console.error("Run Error:", error);
 });
+
+if (process.env.NODE_ENV !== "production") {
+  app.listen(port, () => {
+    console.log(`Server listening on port ${port}`);
+  });
+}
+
+module.exports = app;
