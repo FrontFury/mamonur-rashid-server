@@ -1,6 +1,7 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
+const nodemailer = require("nodemailer");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const { initializeApp, cert, getApps } = require("firebase-admin/app");
 const { getAuth } = require("firebase-admin/auth");
@@ -58,6 +59,14 @@ const verifyFBToken = async (req, res, next) => {
   }
 };
 
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+});
+
 // MongoDB Setup
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.td56s.mongodb.net/?appName=Cluster0`;
 const client = new MongoClient(uri, {
@@ -90,6 +99,106 @@ async function run() {
     const volunteerCollection = db.collection("volunteerings");
     const galleryCollection = db.collection("gallery");
     const referenceCollection = db.collection("references");
+    const otpCollection = db.collection("otps");
+
+        // 1. Send OTP Route
+    app.post("/api/send-otp", async (req, res) => {
+      const { email } = req.body;
+
+      if (!email) {
+        return res.status(400).send({ message: "Email is required" });
+      }
+
+      try {
+        // Check if user already exists in DB
+        const existingUser = await userCollection.findOne({ email });
+        if (existingUser) {
+          return res
+            .status(400)
+            .send({ message: "This email is already registered." });
+        }
+
+        // Generate 6-digit OTP
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 mins expiration
+
+        // Delete old OTP records for this email
+        await otpCollection.deleteMany({ email });
+
+        // Save new OTP
+        await otpCollection.insertOne({
+          email,
+          otp,
+          expiresAt,
+        });
+
+        // Email Template
+        const mailOptions = {
+          from: `"Md. Mamonur Rashid" <${process.env.EMAIL_USER}>`,
+          to: email,
+          subject: `Md. Mamonur Rashid Verification Code - ${otp}`,
+          html: `
+    <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+      <!-- App Logo Banner -->
+      <div style="text-align: center; margin-bottom: 20px;">
+        <img src="https://i.ibb.co.com/5gbhr665/Md-Mamonur-Rashid-Admin.png" alt="TeamTex Logo" style="width: 80px; height: 80px; object-fit: contain;" />
+      </div>
+      
+      <h2 style="color: #163A2D; text-align: center; margin: 0;">Verify Your Email</h2>
+      <p style="color: #555; font-size: 14px; text-align: center; margin-top: 8px;">Use the code below to complete registration</p>
+      
+      <div style="text-align: center; margin: 25px 0;">
+        <span style="background-color: #f4f4f4; padding: 12px 24px; font-size: 28px; font-weight: bold; letter-spacing: 6px; color: #163A2D; border-radius: 6px; border: 1px dashed #163A2D;">${otp}</span>
+      </div>
+      
+      <p style="color: #777; font-size: 12px; text-align: center;">This code will expire in 10 minutes.</p>
+    </div>
+  `,
+        };
+
+        await transporter.sendMail(mailOptions);
+        res.send({ success: true, message: "OTP sent successfully!" });
+      } catch (error) {
+        console.error("Error sending OTP:", error);
+        res.status(500).send({ message: "Failed to send OTP code" });
+      }
+    });
+
+    // 2. Verify OTP Route
+    app.post("/api/verify-otp", async (req, res) => {
+      const { email, otp } = req.body;
+
+      if (!email || !otp) {
+        return res
+          .status(400)
+          .send({ success: false, message: "Email and OTP are required" });
+      }
+
+      try {
+        const record = await otpCollection.findOne({ email, otp });
+
+        if (!record) {
+          return res
+            .status(400)
+            .send({ success: false, message: "Invalid OTP code" });
+        }
+
+        if (new Date() > new Date(record.expiresAt)) {
+          await otpCollection.deleteOne({ _id: record._id });
+          return res
+            .status(400)
+            .send({ success: false, message: "OTP code has expired" });
+        }
+
+        // Clear OTP after successful verification
+        await otpCollection.deleteOne({ _id: record._id });
+
+        res.send({ success: true, message: "Email verified successfully!" });
+      } catch (error) {
+        console.error("OTP Verification Error:", error);
+        res.status(500).send({ message: "Verification failed" });
+      }
+    });
 
     // Admin Middleware
     const verifyAdmin = async (req, res, next) => {
