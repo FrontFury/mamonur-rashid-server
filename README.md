@@ -119,7 +119,7 @@ Configure all required environment variables in your hosting platform before dep
 
 ## 👨‍💻 Developer
 
-**Md. Mamonor Rashid**
+**Estiak Ahamed Tasin**
 
 Backend powered by Node.js, Express.js, and MongoDB.
 
